@@ -91,7 +91,7 @@ with st.sidebar:
     )
  
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# ⚡ SQL Query Performance Predictor")
+st.markdown("#  SQL Query Performance Predictor")
 st.markdown("*Paste a SQL query and get an instant execution-time estimate powered by XGBoost + AST feature engineering*")
 st.markdown("---")
  
@@ -134,7 +134,7 @@ query = st.text_area(
     placeholder="SELECT c.name, SUM(o.amount)\nFROM customers c\nJOIN orders o ON c.id = o.customer_id\nGROUP BY c.name\nORDER BY 2 DESC",
 )
  
-predict_btn = st.button("⚡ Predict Execution Time", type="primary", use_container_width=False)
+predict_btn = st.button(" Predict Execution Time", type="primary", use_container_width=False)
  
 # ── Prediction ────────────────────────────────────────────────────────────────
 if predict_btn and query.strip():

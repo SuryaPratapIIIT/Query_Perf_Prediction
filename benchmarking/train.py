@@ -50,7 +50,59 @@ def load_data():
     print(f"  min={y_raw.min():.2f}  max={y_raw.max():.2f}  mean={y_raw.mean():.2f}")
     print(f"\nFeatures ({len(feature_cols)}): {feature_cols}\n")
  
+    plot_eda(df, y_raw, y)
     return X, y, feature_cols
+
+def plot_eda(df, y_raw, y):
+    print("Generating EDA plots...")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    try:
+        import seaborn as sns
+    except ImportError:
+        pass
+    import os
+    os.makedirs("outputs", exist_ok=True)
+
+    # 1. Target Distribution
+    plt.figure(figsize=(8, 5))
+    plt.hist(y_raw, bins=30, color="crimson", alpha=0.7, edgecolor='k')
+    plt.title("Distribution of Raw Execution Time (ms)")
+    plt.xlabel("Execution Time (ms)")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.savefig("outputs/eda_target_distribution_raw.png", dpi=150)
+    plt.close()
+
+    # 2. Target Distribution (Log Transformed)
+    plt.figure(figsize=(8, 5))
+    plt.hist(y, bins=30, color="indigo", alpha=0.7, edgecolor='k')
+    plt.title("Distribution of Log-Transformed Execution Time")
+    plt.xlabel("log1p(Execution Time)")
+    plt.ylabel("Frequency")
+    plt.tight_layout()
+    plt.savefig("outputs/eda_target_distribution_log.png", dpi=150)
+    plt.close()
+
+    # 3. Correlation Heatmap
+    try:
+        plt.figure(figsize=(10, 8))
+        corrmat = df.corr()
+        # Top 12 absolute correlated features
+        top_corr_features = corrmat.corrwith(df["execution_time_ms"]).abs().nlargest(12).index
+        import numpy as np
+        cm = np.corrcoef(df[top_corr_features].values.T)
+        sns.heatmap(cm, annot=True, square=True, fmt='.2f', annot_kws={'size': 9}, 
+                    yticklabels=top_corr_features.values, xticklabels=top_corr_features.values, cmap="coolwarm")
+        plt.title("Top Correlated Features with Execution Time")
+        plt.tight_layout()
+        plt.savefig("outputs/eda_correlation_heatmap.png", dpi=150)
+        plt.close()
+    except Exception:
+        pass
+
+    print("✓ EDA plots saved to outputs/")
  
  
 # ---------------------------------------------------------------------------
@@ -77,7 +129,7 @@ def train(X, y):
  
     model.fit(
         X_train, y_train,
-        eval_set=[(X_test, y_test)],
+        eval_set=[(X_train, y_train), (X_test, y_test)],
         verbose=False,
     )
  
@@ -116,11 +168,87 @@ def evaluate(model, X_test, y_test):
     print("\nSample predictions:")
     print(comparison.head(10).to_string(index=False))
  
-    return mae, rmse, r2
+    return mae, rmse, r2, actual.values, preds
  
  
 # ---------------------------------------------------------------------------
-# 4. SHAP EXPLAINABILITY
+# 4. PLOTTING
+# ---------------------------------------------------------------------------
+ 
+def plot_predictions(actual, preds):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+ 
+    os.makedirs("outputs", exist_ok=True)
+ 
+    # Actual vs Predicted
+    plt.figure(figsize=(7, 7))
+    plt.scatter(actual, preds, alpha=0.6, edgecolor="k", linewidth=0.4)
+    lims = [0, max(actual.max(), preds.max()) * 1.05]
+    plt.plot(lims, lims, "--", color="tab:gray", label="perfect")
+    plt.xlabel("Actual execution_time_ms")
+    plt.ylabel("Predicted execution_time_ms")
+    plt.title("Actual vs Predicted execution time")
+    plt.xlim(lims)
+    plt.ylim(lims)
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("outputs/predicted_vs_actual.png", dpi=150, bbox_inches="tight")
+    plt.close()
+ 
+    # Residual distribution
+    residuals = actual - preds
+    plt.figure(figsize=(8, 5))
+    plt.hist(residuals, bins=30, color="tab:blue", alpha=0.65)
+    plt.axvline(0, color="k", linestyle="--")
+    plt.xlabel("Residual (actual - predicted) ms")
+    plt.ylabel("Count")
+    plt.title("Residual distribution")
+    plt.tight_layout()
+    plt.savefig("outputs/residual_histogram.png", dpi=150, bbox_inches="tight")
+    plt.close()
+ 
+    print("\n✓ Prediction graphs saved to outputs/")
+
+def plot_learning_curves(model):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    
+    results = model.evals_result()
+    epochs = len(results['validation_0']['rmse'])
+    x_axis = range(0, epochs)
+    
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_axis, results['validation_0']['rmse'], label='Train RMSE')
+    plt.plot(x_axis, results['validation_1']['rmse'], label='Test RMSE')
+    plt.legend()
+    plt.ylabel('RMSE (log space)')
+    plt.xlabel('Boosting Round')
+    plt.title('XGBoost Learning Curves')
+    plt.tight_layout()
+    plt.savefig("outputs/learning_curves.png", dpi=150)
+    plt.close()
+    print("✓ Learning curves plot saved to outputs/")
+
+def plot_xgb_importance(model):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from xgboost import plot_importance
+    
+    plt.figure(figsize=(10, 8))
+    plot_importance(model, max_num_features=15, importance_type='weight', title='XGBoost Feature Importance (Weight)')
+    plt.tight_layout()
+    plt.savefig("outputs/xgb_feature_importance.png", dpi=150)
+    plt.close()
+    print("✓ XGBoost feature importance plot saved to outputs/")
+ 
+ 
+# ---------------------------------------------------------------------------
+# 5. SHAP EXPLAINABILITY
 # ---------------------------------------------------------------------------
  
 def shap_analysis(model, X_test, feature_cols):
@@ -162,7 +290,13 @@ def shap_analysis(model, X_test, feature_cols):
 if __name__ == "__main__":
     X, y, feature_cols = load_data()
     model, X_train, X_test, y_train, y_test = train(X, y)
-    evaluate(model, X_test, y_test)
+    mae, rmse, r2, actual, preds = evaluate(model, X_test, y_test)
+    
+    # ── Post-Training Plots ──
+    plot_predictions(actual, preds)
+    plot_learning_curves(model)
+    plot_xgb_importance(model)
+    
     shap_analysis(model, X_test, feature_cols)
  
     # Save model artifacts

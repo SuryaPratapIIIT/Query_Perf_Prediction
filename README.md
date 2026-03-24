@@ -23,8 +23,14 @@ query-perf-predictor/
 │   ├── benchmark.db            ← SQLite database (auto-generated)
 │   └── query_features.csv      ← Engineered features + labels
 ├── outputs/
-│   ├── shap_importance.png
-│   └── shap_beeswarm.png
+│   ├── eda_target_distribution_raw.png  ← Starting analysis
+│   ├── eda_target_distribution_log.png  ← Starting analysis
+│   ├── learning_curves.png              ← Ending analysis
+│   ├── predicted_vs_actual.png          ← Ending analysis
+│   ├── residual_histogram.png           ← Ending analysis
+│   ├── xgb_feature_importance.png       ← Ending analysis
+│   ├── shap_importance.png              ← Ending analysis
+│   └── shap_beeswarm.png                ← Ending analysis
 ├── app.py                      ← Streamlit UI
 ├── model.pkl                   ← Trained XGBoost model
 ├── feature_names.pkl
@@ -57,6 +63,9 @@ FeatureDescriptionplan_uses_indexDB will use an indexplan_does_full_scanDB must 
 Algorithm: XGBoost Regressor
 Target: log1p(execution_time_ms) — log-transformed to handle skew
 Evaluation: MAE, RMSE, R²
+Graphical Evaluation:
+- Pre-training (EDA): Target distribution and log-transformation analysis.
+- Post-training: Learning curves, prediction scatter plots, residual histograms, and XGBoost native feature importance.
 
 
 📊 SHAP Explainability
